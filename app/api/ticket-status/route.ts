@@ -1,6 +1,7 @@
 type RequestPayload = {
   ticketNumber: string;
   captchaToken?: string;
+  lang?: string;
 };
 
 type TicketResult = {
@@ -11,6 +12,55 @@ type TicketResult = {
 
 const DEFAULT_API_URL =
   "https://www.zohoapis.eu/crm/v7/functions/sj_oye_zh_desk_get_ticket_status/actions/execute?auth_type=apikey&zapikey=1003.2df8c0349a5c22f9dfd33c013bf88fd4.790b652d19a7366cbbccfd2f232491bc";
+const TURNSTILE_TEST_SECRET_KEY = "1x0000000000000000000000000000000AA";
+
+type Lang = "uk" | "ru" | "en";
+
+const MESSAGES: Record<
+  Lang,
+  {
+    emptyTicket: string;
+    captchaRequired: string;
+    captchaFailed: string;
+    apiRequestFailed: string;
+    notFound: string;
+    invalidResponse: string;
+    requestError: string;
+  }
+> = {
+  uk: {
+    emptyTicket: "Введіть номер заявки",
+    captchaRequired: "Підтвердіть, що ви не робот",
+    captchaFailed: "Captcha не пройдена.",
+    apiRequestFailed: "Помилка запиту до API",
+    notFound: "Заявку не знайдено",
+    invalidResponse: "Помилка відповіді сервера",
+    requestError: "Помилка сервера."
+  },
+  ru: {
+    emptyTicket: "Введите номер заявки",
+    captchaRequired: "Подтвердите, что вы не робот",
+    captchaFailed: "Captcha не пройдена.",
+    apiRequestFailed: "Ошибка запроса к API",
+    notFound: "Заявка не найдена",
+    invalidResponse: "Ошибка ответа сервера",
+    requestError: "Ошибка сервера."
+  },
+  en: {
+    emptyTicket: "Enter ticket number",
+    captchaRequired: "Please complete captcha",
+    captchaFailed: "Captcha verification failed.",
+    apiRequestFailed: "API request failed",
+    notFound: "Ticket not found",
+    invalidResponse: "Invalid server response",
+    requestError: "Server error."
+  }
+};
+
+function normalizeLang(langValue?: string): Lang {
+  if (langValue === "ru" || langValue === "en") return langValue;
+  return "uk";
+}
 
 function getClientIp(request: Request): string | null {
   const forwardedFor = request.headers.get("x-forwarded-for");
@@ -43,7 +93,7 @@ async function verifyTurnstile(secretKey: string, token: string, ip: string | nu
   return Boolean(data.success);
 }
 
-function parseTicketFromApi(apiData: unknown): { ticket: TicketResult | null; errorMessage?: string } {
+function parseTicketFromApi(apiData: unknown, messages: (typeof MESSAGES)[Lang]): { ticket: TicketResult | null; errorMessage?: string } {
   const payload = apiData as {
     code?: string;
     message?: string;
@@ -51,18 +101,18 @@ function parseTicketFromApi(apiData: unknown): { ticket: TicketResult | null; er
   };
 
   if (!payload || payload.code !== "success" || !payload.details?.output) {
-    return { ticket: null, errorMessage: payload?.message || "Заявку не знайдено" };
+    return { ticket: null, errorMessage: payload?.message || messages.notFound };
   }
 
   let inner: any;
   try {
     inner = JSON.parse(payload.details.output);
   } catch {
-    return { ticket: null, errorMessage: "Помилка відповіді сервера" };
+    return { ticket: null, errorMessage: messages.invalidResponse };
   }
 
   if (!inner || inner.success !== true) {
-    return { ticket: null, errorMessage: inner?.message || "Заявку не знайдено" };
+    return { ticket: null, errorMessage: inner?.message || messages.notFound };
   }
 
   return {
@@ -77,22 +127,24 @@ function parseTicketFromApi(apiData: unknown): { ticket: TicketResult | null; er
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as RequestPayload;
+    const lang = normalizeLang(payload.lang);
+    const messages = MESSAGES[lang];
     const ticketNumber = String(payload.ticketNumber || "").trim();
 
     if (!ticketNumber) {
-      return Response.json({ message: "Введіть номер заявки" }, { status: 400 });
+      return Response.json({ message: messages.emptyTicket }, { status: 400 });
     }
 
-    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
-    const captchaEnabled = Boolean(turnstileSecret);
+    if (!payload.captchaToken) {
+      return Response.json({ message: messages.captchaRequired }, { status: 400 });
+    }
 
-    if (captchaEnabled) {
-      const ip = getClientIp(request);
-      const captchaValid = await verifyTurnstile(turnstileSecret as string, payload.captchaToken || "", ip);
+    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY || TURNSTILE_TEST_SECRET_KEY;
+    const ip = getClientIp(request);
+    const captchaValid = await verifyTurnstile(turnstileSecret, payload.captchaToken, ip);
 
-      if (!captchaValid) {
-        return Response.json({ message: "Captcha не пройдена." }, { status: 400 });
-      }
+    if (!captchaValid) {
+      return Response.json({ message: messages.captchaFailed }, { status: 400 });
     }
 
     const apiUrl = process.env.TICKET_STATUS_API_URL || DEFAULT_API_URL;
@@ -108,18 +160,18 @@ export async function POST(request: Request) {
     });
 
     if (!apiResponse.ok) {
-      return Response.json({ message: "Помилка запиту до API" }, { status: 502 });
+      return Response.json({ message: messages.apiRequestFailed }, { status: 502 });
     }
 
     const rawData = (await apiResponse.json()) as unknown;
-    const parsed = parseTicketFromApi(rawData);
+    const parsed = parseTicketFromApi(rawData, messages);
 
     if (!parsed.ticket) {
-      return Response.json({ message: parsed.errorMessage || "Заявку не знайдено" }, { status: 404 });
+      return Response.json({ message: parsed.errorMessage || messages.notFound }, { status: 404 });
     }
 
     return Response.json({ ticket: parsed.ticket });
   } catch {
-    return Response.json({ message: "Ошибка сервера." }, { status: 500 });
+    return Response.json({ message: MESSAGES.uk.requestError }, { status: 500 });
   }
 }

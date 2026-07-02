@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import Script from "next/script";
 import { FormEvent, useEffect, useState } from "react";
 
@@ -9,9 +10,85 @@ declare global {
   }
 }
 
+type Lang = "uk" | "ru" | "en";
+
+const TURNSTILE_TEST_SITE_KEY = "1x00000000000000000000AA";
+
+const TEXTS: Record<
+  Lang,
+  {
+    title: string;
+    subtitle: string;
+    ticketLabel: string;
+    ticketPlaceholder: string;
+    buttonIdle: string;
+    buttonLoading: string;
+    ticketNumberRow: string;
+    statusRow: string;
+    emptyTicket: string;
+    requestError: string;
+    notFound: string;
+    unknownError: string;
+    captchaRequired: string;
+  }
+> = {
+  uk: {
+    title: "Перевірка статусу заявки",
+    subtitle: "Введіть номер заявки, щоб отримати її поточний статус.",
+    ticketLabel: "Номер заявки",
+    ticketPlaceholder: "Наприклад, 10324",
+    buttonIdle: "Перевірити",
+    buttonLoading: "Перевіряємо...",
+    ticketNumberRow: "Номер заявки",
+    statusRow: "Статус",
+    emptyTicket: "Введіть номер заявки",
+    requestError: "Помилка запиту",
+    notFound: "Заявку не знайдено",
+    unknownError: "Невідома помилка",
+    captchaRequired: "Підтвердіть, що ви не робот"
+  },
+  ru: {
+    title: "Проверка статуса заявки",
+    subtitle: "Введите номер заявки, чтобы получить ее текущий статус.",
+    ticketLabel: "Номер заявки",
+    ticketPlaceholder: "Например, 10324",
+    buttonIdle: "Проверить",
+    buttonLoading: "Проверяем...",
+    ticketNumberRow: "Номер заявки",
+    statusRow: "Статус",
+    emptyTicket: "Введите номер заявки",
+    requestError: "Ошибка запроса",
+    notFound: "Заявка не найдена",
+    unknownError: "Неизвестная ошибка",
+    captchaRequired: "Подтвердите, что вы не робот"
+  },
+  en: {
+    title: "Ticket Status Check",
+    subtitle: "Enter your ticket number to see the current status.",
+    ticketLabel: "Ticket number",
+    ticketPlaceholder: "For example, 10324",
+    buttonIdle: "Check status",
+    buttonLoading: "Checking...",
+    ticketNumberRow: "Ticket number",
+    statusRow: "Status",
+    emptyTicket: "Enter ticket number",
+    requestError: "Request error",
+    notFound: "Ticket not found",
+    unknownError: "Unknown error",
+    captchaRequired: "Please complete captcha"
+  }
+};
+
+function normalizeLang(langValue: string | null): Lang {
+  if (langValue === "ru" || langValue === "en") return langValue;
+  return "uk";
+}
+
 export default function HomePage() {
-  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
-  const captchaEnabled = Boolean(turnstileSiteKey);
+  const searchParams = useSearchParams();
+  const lang = normalizeLang(searchParams.get("lang"));
+  const t = TEXTS[lang];
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || TURNSTILE_TEST_SITE_KEY;
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [captchaToken, setCaptchaToken] = useState("");
@@ -36,11 +113,18 @@ export default function HomePage() {
     const form = new FormData(event.currentTarget);
     const payload = {
       ticketNumber: String(form.get("ticketNumber") || "").trim(),
-      captchaToken
+      captchaToken,
+      lang
     };
 
     if (!payload.ticketNumber) {
-      setErrorMessage("Введіть номер заявки");
+      setErrorMessage(t.emptyTicket);
+      setLoading(false);
+      return;
+    }
+
+    if (!payload.captchaToken) {
+      setErrorMessage(t.captchaRequired);
       setLoading(false);
       return;
     }
@@ -64,16 +148,16 @@ export default function HomePage() {
       };
 
       if (!response.ok) {
-        throw new Error(data.message || "Помилка запиту");
+        throw new Error(data.message || t.requestError);
       }
 
       if (!data.ticket) {
-        throw new Error("Заявку не знайдено");
+        throw new Error(t.notFound);
       }
 
       setTicketStatus(data.ticket);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Неизвестная ошибка";
+      const message = error instanceof Error ? error.message : t.unknownError;
       setErrorMessage(message);
     } finally {
       setLoading(false);
@@ -82,44 +166,38 @@ export default function HomePage() {
 
   return (
     <main className="wrap">
-      {captchaEnabled && <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />}
+      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
       <section className="card">
-        <h1>Перевірка статусу заявки</h1>
-        <p>Введіть номер заявки, щоб отримати її поточний статус.</p>
+        <h1>{t.title}</h1>
+        <p>{t.subtitle}</p>
 
         <form onSubmit={onSubmit}>
           <label>
-            Номер заявки
+            {t.ticketLabel}
             <input
               name="ticketNumber"
               inputMode="numeric"
               autoComplete="off"
-              placeholder="Наприклад, 10324"
+              placeholder={t.ticketPlaceholder}
               required
             />
           </label>
 
-          {captchaEnabled ? (
-            <div className="cf-turnstile" data-sitekey={turnstileSiteKey} data-callback="onTurnstileSuccess" />
-          ) : (
-            <div className="hint">
-              Captcha отключена (можно включить позже через `NEXT_PUBLIC_TURNSTILE_SITE_KEY`).
-            </div>
-          )}
+          <div className="cf-turnstile" data-sitekey={turnstileSiteKey} data-callback="onTurnstileSuccess" />
 
           <button type="submit" disabled={loading}>
-            {loading ? "Перевіряємо..." : "Перевірити"}
+            {loading ? t.buttonLoading : t.buttonIdle}
           </button>
 
           {errorMessage && <div className="err">{errorMessage}</div>}
           {ticketStatus && (
             <div className="result">
               <div className="row">
-                <span className="rowLabel">Номер заявки</span>
+                <span className="rowLabel">{t.ticketNumberRow}</span>
                 <span className="rowValue">{ticketStatus.ticketNumber}</span>
               </div>
               <div className="row">
-                <span className="rowLabel">Статус</span>
+                <span className="rowLabel">{t.statusRow}</span>
                 <span className="rowValue">
                   <span className={ticketStatus.statusType.toLowerCase() === "closed" ? "badge closed" : "badge open"}>
                     {ticketStatus.status}
