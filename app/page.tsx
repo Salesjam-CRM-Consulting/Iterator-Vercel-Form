@@ -11,8 +11,6 @@ declare global {
 
 type Lang = "uk" | "ru" | "en";
 
-const TURNSTILE_TEST_SITE_KEY = "1x00000000000000000000AA";
-
 const TEXTS: Record<
   Lang,
   {
@@ -29,6 +27,7 @@ const TEXTS: Record<
     notFound: string;
     unknownError: string;
     captchaRequired: string;
+    captchaConfigError: string;
   }
 > = {
   uk: {
@@ -44,7 +43,8 @@ const TEXTS: Record<
     requestError: "Помилка запиту",
     notFound: "Заявку не знайдено",
     unknownError: "Невідома помилка",
-    captchaRequired: "Підтвердіть, що ви не робот"
+    captchaRequired: "Підтвердіть, що ви не робот",
+    captchaConfigError: "Captcha не налаштована. Повідомте адміністратора."
   },
   ru: {
     title: "Проверка статуса заявки",
@@ -59,7 +59,8 @@ const TEXTS: Record<
     requestError: "Ошибка запроса",
     notFound: "Заявка не найдена",
     unknownError: "Неизвестная ошибка",
-    captchaRequired: "Подтвердите, что вы не робот"
+    captchaRequired: "Подтвердите, что вы не робот",
+    captchaConfigError: "Captcha не настроена. Сообщите администратору."
   },
   en: {
     title: "Ticket Status Check",
@@ -74,7 +75,8 @@ const TEXTS: Record<
     requestError: "Request error",
     notFound: "Ticket not found",
     unknownError: "Unknown error",
-    captchaRequired: "Please complete captcha"
+    captchaRequired: "Please complete captcha",
+    captchaConfigError: "Captcha is not configured. Contact administrator."
   }
 };
 
@@ -86,7 +88,7 @@ function normalizeLang(langValue: string | null): Lang {
 export default function HomePage() {
   const [lang, setLang] = useState<Lang>("uk");
   const t = TEXTS[lang];
-  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || TURNSTILE_TEST_SITE_KEY;
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [captchaToken, setCaptchaToken] = useState("");
@@ -167,7 +169,9 @@ export default function HomePage() {
 
   return (
     <main className="wrap">
-      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
+      {Boolean(turnstileSiteKey) && (
+        <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
+      )}
       <section className="card">
         <h1>{t.title}</h1>
         <p>{t.subtitle}</p>
@@ -184,7 +188,11 @@ export default function HomePage() {
             />
           </label>
 
-          <div className="cf-turnstile" data-sitekey={turnstileSiteKey} data-callback="onTurnstileSuccess" />
+          {turnstileSiteKey ? (
+            <div className="cf-turnstile" data-sitekey={turnstileSiteKey} data-callback="onTurnstileSuccess" />
+          ) : (
+            <div className="err">{t.captchaConfigError}</div>
+          )}
 
           <button type="submit" disabled={loading}>
             {loading ? t.buttonLoading : t.buttonIdle}

@@ -5,7 +5,7 @@
 ## Что внутри
 
 - форма ввода номера заявки;
-- captcha через Cloudflare Turnstile (включена всегда);
+- captcha через Cloudflare Turnstile (включена всегда, только с реальными ключами);
 - серверный API `/api/ticket-status` с проверкой captcha;
 - прокси-запрос к API статусов тикетов (как в модуле `mod_ticketstatus`);
 - вывод результата `Номер заявки + Статус`;
@@ -24,14 +24,12 @@
 ## Деплой на Vercel
 
 1. Импортируй папку `ticket-form-vercel` как отдельный проект.
-2. В Variables добавь:
+2. В Variables обязательно добавь:
    - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
    - `TURNSTILE_SECRET_KEY`
    - `TICKET_STATUS_API_URL`
 3. Deploy.
 
-Если `NEXT_PUBLIC_TURNSTILE_SITE_KEY` и `TURNSTILE_SECRET_KEY` не заданы, используются тестовые ключи Turnstile.
-Для продакшена лучше указать свои ключи.
 Если `TICKET_STATUS_API_URL` не задан, используется URL по умолчанию из старого модуля.
 
 ## Вставка в Joomla через iframe

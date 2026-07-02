@@ -12,7 +12,6 @@ type TicketResult = {
 
 const DEFAULT_API_URL =
   "https://www.zohoapis.eu/crm/v7/functions/sj_oye_zh_desk_get_ticket_status/actions/execute?auth_type=apikey&zapikey=1003.2df8c0349a5c22f9dfd33c013bf88fd4.790b652d19a7366cbbccfd2f232491bc";
-const TURNSTILE_TEST_SECRET_KEY = "1x0000000000000000000000000000000AA";
 
 type Lang = "uk" | "ru" | "en";
 
@@ -22,6 +21,7 @@ const MESSAGES: Record<
     emptyTicket: string;
     captchaRequired: string;
     captchaFailed: string;
+    captchaConfigError: string;
     apiRequestFailed: string;
     notFound: string;
     invalidResponse: string;
@@ -32,6 +32,7 @@ const MESSAGES: Record<
     emptyTicket: "Введіть номер заявки",
     captchaRequired: "Підтвердіть, що ви не робот",
     captchaFailed: "Captcha не пройдена.",
+    captchaConfigError: "Captcha не налаштована. Повідомте адміністратора.",
     apiRequestFailed: "Помилка запиту до API",
     notFound: "Заявку не знайдено",
     invalidResponse: "Помилка відповіді сервера",
@@ -41,6 +42,7 @@ const MESSAGES: Record<
     emptyTicket: "Введите номер заявки",
     captchaRequired: "Подтвердите, что вы не робот",
     captchaFailed: "Captcha не пройдена.",
+    captchaConfigError: "Captcha не настроена. Сообщите администратору.",
     apiRequestFailed: "Ошибка запроса к API",
     notFound: "Заявка не найдена",
     invalidResponse: "Ошибка ответа сервера",
@@ -50,6 +52,7 @@ const MESSAGES: Record<
     emptyTicket: "Enter ticket number",
     captchaRequired: "Please complete captcha",
     captchaFailed: "Captcha verification failed.",
+    captchaConfigError: "Captcha is not configured. Contact administrator.",
     apiRequestFailed: "API request failed",
     notFound: "Ticket not found",
     invalidResponse: "Invalid server response",
@@ -139,7 +142,10 @@ export async function POST(request: Request) {
       return Response.json({ message: messages.captchaRequired }, { status: 400 });
     }
 
-    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY || TURNSTILE_TEST_SECRET_KEY;
+    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY || "";
+    if (!turnstileSecret) {
+      return Response.json({ message: messages.captchaConfigError }, { status: 500 });
+    }
     const ip = getClientIp(request);
     const captchaValid = await verifyTurnstile(turnstileSecret, payload.captchaToken, ip);
 
