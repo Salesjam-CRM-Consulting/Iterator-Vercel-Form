@@ -10,6 +10,8 @@ declare global {
 }
 
 export default function HomePage() {
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
+  const captchaEnabled = Boolean(turnstileSiteKey);
   const [loading, setLoading] = useState(false);
   const [okMessage, setOkMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -64,7 +66,7 @@ export default function HomePage() {
 
   return (
     <main className="wrap">
-      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
+      {captchaEnabled && <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />}
       <section className="card">
         <h1>Форма заявки</h1>
         <p>Эту страницу можно вставить в Joomla через iframe.</p>
@@ -90,11 +92,13 @@ export default function HomePage() {
             <textarea name="message" required />
           </label>
 
-          <div
-            className="cf-turnstile"
-            data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-            data-callback="onTurnstileSuccess"
-          />
+          {captchaEnabled ? (
+            <div className="cf-turnstile" data-sitekey={turnstileSiteKey} data-callback="onTurnstileSuccess" />
+          ) : (
+            <div className="hint">
+              Captcha отключена (можно включить позже через `NEXT_PUBLIC_TURNSTILE_SITE_KEY`).
+            </div>
+          )}
 
           <button type="submit" disabled={loading}>
             {loading ? "Отправка..." : "Отправить"}

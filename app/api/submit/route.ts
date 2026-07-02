@@ -6,12 +6,16 @@ type SubmitPayload = {
   captchaToken: string;
 };
 
-async function verifyTurnstile(token: string, ip: string | null): Promise<boolean> {
-  const secretKey = process.env.TURNSTILE_SECRET_KEY;
-
-  if (!secretKey) {
-    return false;
+function getClientIp(request: Request): string | null {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    return forwardedFor.split(",")[0]?.trim() || null;
   }
+  return request.headers.get("x-real-ip");
+}
+
+async function verifyTurnstile(secretKey: string, token: string, ip: string | null): Promise<boolean> {
+  if (!token) return false;
 
   const body = new URLSearchParams();
   body.set("secret", secretKey);
@@ -41,18 +45,28 @@ export async function POST(request: Request) {
       return Response.json({ message: "Заполни обязательные поля." }, { status: 400 });
     }
 
-    if (!payload.captchaToken) {
-      return Response.json({ message: "Пройди captcha." }, { status: 400 });
-    }
+    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+    const captchaEnabled = Boolean(turnstileSecret);
 
-    const ip = request.headers.get("x-forwarded-for");
-    const captchaValid = await verifyTurnstile(payload.captchaToken, ip);
+    if (captchaEnabled) {
+      const ip = getClientIp(request);
+      const captchaValid = await verifyTurnstile(turnstileSecret as string, payload.captchaToken, ip);
 
-    if (!captchaValid) {
-      return Response.json({ message: "Captcha не пройдена." }, { status: 400 });
+      if (!captchaValid) {
+        return Response.json({ message: "Captcha не пройдена." }, { status: 400 });
+      }
     }
 
     const webhookUrl = process.env.WEBHOOK_URL;
+
+    const submission = {
+      name: payload.name,
+      email: payload.email,
+      phone: payload.phone || "",
+      message: payload.message,
+      source: "ticket-form-vercel",
+      createdAt: new Date().toISOString()
+    };
 
     if (webhookUrl) {
       const webhookResponse = await fetch(webhookUrl, {
@@ -60,19 +74,15 @@ export async function POST(request: Request) {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          name: payload.name,
-          email: payload.email,
-          phone: payload.phone || "",
-          message: payload.message,
-          source: "ticket-form-vercel",
-          createdAt: new Date().toISOString()
-        })
+        body: JSON.stringify(submission)
       });
 
       if (!webhookResponse.ok) {
         return Response.json({ message: "Не удалось отправить данные в webhook." }, { status: 502 });
       }
+    } else {
+      // Fallback for zero-config mode: keep submissions in Vercel logs.
+      console.log("[ticket-form-vercel] submission", submission);
     }
 
     return Response.json({ ok: true });
