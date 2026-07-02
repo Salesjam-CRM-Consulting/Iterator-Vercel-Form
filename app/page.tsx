@@ -27,7 +27,6 @@ const TEXTS: Record<
     notFound: string;
     unknownError: string;
     captchaRequired: string;
-    captchaConfigError: string;
   }
 > = {
   uk: {
@@ -43,8 +42,7 @@ const TEXTS: Record<
     requestError: "Помилка запиту",
     notFound: "Заявку не знайдено",
     unknownError: "Невідома помилка",
-    captchaRequired: "Підтвердіть, що ви не робот",
-    captchaConfigError: "Captcha не налаштована. Повідомте адміністратора."
+    captchaRequired: "Підтвердіть, що ви не робот"
   },
   ru: {
     title: "Проверка статуса заявки",
@@ -59,8 +57,7 @@ const TEXTS: Record<
     requestError: "Ошибка запроса",
     notFound: "Заявка не найдена",
     unknownError: "Неизвестная ошибка",
-    captchaRequired: "Подтвердите, что вы не робот",
-    captchaConfigError: "Captcha не настроена. Сообщите администратору."
+    captchaRequired: "Подтвердите, что вы не робот"
   },
   en: {
     title: "Ticket Status Check",
@@ -75,8 +72,7 @@ const TEXTS: Record<
     requestError: "Request error",
     notFound: "Ticket not found",
     unknownError: "Unknown error",
-    captchaRequired: "Please complete captcha",
-    captchaConfigError: "Captcha is not configured. Contact administrator."
+    captchaRequired: "Please complete captcha"
   }
 };
 
@@ -126,7 +122,7 @@ export default function HomePage() {
       return;
     }
 
-    if (!payload.captchaToken) {
+    if (turnstileSiteKey && !payload.captchaToken) {
       setErrorMessage(t.captchaRequired);
       setLoading(false);
       return;
@@ -188,10 +184,8 @@ export default function HomePage() {
             />
           </label>
 
-          {turnstileSiteKey ? (
+          {turnstileSiteKey && (
             <div className="cf-turnstile" data-sitekey={turnstileSiteKey} data-callback="onTurnstileSuccess" />
-          ) : (
-            <div className="err">{t.captchaConfigError}</div>
           )}
 
           <button type="submit" disabled={loading}>

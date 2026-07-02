@@ -21,7 +21,6 @@ const MESSAGES: Record<
     emptyTicket: string;
     captchaRequired: string;
     captchaFailed: string;
-    captchaConfigError: string;
     apiRequestFailed: string;
     notFound: string;
     invalidResponse: string;
@@ -32,7 +31,6 @@ const MESSAGES: Record<
     emptyTicket: "Введіть номер заявки",
     captchaRequired: "Підтвердіть, що ви не робот",
     captchaFailed: "Captcha не пройдена.",
-    captchaConfigError: "Captcha не налаштована. Повідомте адміністратора.",
     apiRequestFailed: "Помилка запиту до API",
     notFound: "Заявку не знайдено",
     invalidResponse: "Помилка відповіді сервера",
@@ -42,7 +40,6 @@ const MESSAGES: Record<
     emptyTicket: "Введите номер заявки",
     captchaRequired: "Подтвердите, что вы не робот",
     captchaFailed: "Captcha не пройдена.",
-    captchaConfigError: "Captcha не настроена. Сообщите администратору.",
     apiRequestFailed: "Ошибка запроса к API",
     notFound: "Заявка не найдена",
     invalidResponse: "Ошибка ответа сервера",
@@ -52,7 +49,6 @@ const MESSAGES: Record<
     emptyTicket: "Enter ticket number",
     captchaRequired: "Please complete captcha",
     captchaFailed: "Captcha verification failed.",
-    captchaConfigError: "Captcha is not configured. Contact administrator.",
     apiRequestFailed: "API request failed",
     notFound: "Ticket not found",
     invalidResponse: "Invalid server response",
@@ -138,19 +134,19 @@ export async function POST(request: Request) {
       return Response.json({ message: messages.emptyTicket }, { status: 400 });
     }
 
-    if (!payload.captchaToken) {
+    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY || "";
+
+    if (turnstileSecret && !payload.captchaToken) {
       return Response.json({ message: messages.captchaRequired }, { status: 400 });
     }
 
-    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY || "";
-    if (!turnstileSecret) {
-      return Response.json({ message: messages.captchaConfigError }, { status: 500 });
-    }
-    const ip = getClientIp(request);
-    const captchaValid = await verifyTurnstile(turnstileSecret, payload.captchaToken, ip);
+    if (turnstileSecret) {
+      const ip = getClientIp(request);
+      const captchaValid = await verifyTurnstile(turnstileSecret, payload.captchaToken || "", ip);
 
-    if (!captchaValid) {
-      return Response.json({ message: messages.captchaFailed }, { status: 400 });
+      if (!captchaValid) {
+        return Response.json({ message: messages.captchaFailed }, { status: 400 });
+      }
     }
 
     const apiUrl = process.env.TICKET_STATUS_API_URL || DEFAULT_API_URL;
