@@ -13,9 +13,13 @@ export default function HomePage() {
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
   const captchaEnabled = Boolean(turnstileSiteKey);
   const [loading, setLoading] = useState(false);
-  const [okMessage, setOkMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [captchaToken, setCaptchaToken] = useState("");
+  const [ticketStatus, setTicketStatus] = useState<{
+    ticketNumber: string;
+    status: string;
+    statusType: string;
+  } | null>(null);
 
   useEffect(() => {
     window.onTurnstileSuccess = (token: string) => {
@@ -26,20 +30,23 @@ export default function HomePage() {
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
-    setOkMessage("");
     setErrorMessage("");
+    setTicketStatus(null);
 
     const form = new FormData(event.currentTarget);
     const payload = {
-      name: String(form.get("name") || ""),
-      email: String(form.get("email") || ""),
-      phone: String(form.get("phone") || ""),
-      message: String(form.get("message") || ""),
+      ticketNumber: String(form.get("ticketNumber") || "").trim(),
       captchaToken
     };
 
+    if (!payload.ticketNumber) {
+      setErrorMessage("Введіть номер заявки");
+      setLoading(false);
+      return;
+    }
+
     try {
-      const response = await fetch("/api/submit", {
+      const response = await fetch("/api/ticket-status", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -47,15 +54,24 @@ export default function HomePage() {
         body: JSON.stringify(payload)
       });
 
-      const data = (await response.json()) as { message?: string };
+      const data = (await response.json()) as {
+        message?: string;
+        ticket?: {
+          ticketNumber: string;
+          status: string;
+          statusType: string;
+        };
+      };
 
       if (!response.ok) {
-        throw new Error(data.message || "Ошибка отправки формы");
+        throw new Error(data.message || "Помилка запиту");
       }
 
-      event.currentTarget.reset();
-      setCaptchaToken("");
-      setOkMessage("Заявка отправлена. Скоро свяжемся.");
+      if (!data.ticket) {
+        throw new Error("Заявку не знайдено");
+      }
+
+      setTicketStatus(data.ticket);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Неизвестная ошибка";
       setErrorMessage(message);
@@ -68,28 +84,19 @@ export default function HomePage() {
     <main className="wrap">
       {captchaEnabled && <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />}
       <section className="card">
-        <h1>Форма заявки</h1>
-        <p>Эту страницу можно вставить в Joomla через iframe.</p>
+        <h1>Перевірка статусу заявки</h1>
+        <p>Введіть номер заявки, щоб отримати її поточний статус.</p>
 
         <form onSubmit={onSubmit}>
           <label>
-            Имя
-            <input name="name" required />
-          </label>
-
-          <label>
-            Email
-            <input name="email" type="email" required />
-          </label>
-
-          <label>
-            Телефон
-            <input name="phone" />
-          </label>
-
-          <label>
-            Сообщение
-            <textarea name="message" required />
+            Номер заявки
+            <input
+              name="ticketNumber"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="Наприклад, 10324"
+              required
+            />
           </label>
 
           {captchaEnabled ? (
@@ -101,11 +108,26 @@ export default function HomePage() {
           )}
 
           <button type="submit" disabled={loading}>
-            {loading ? "Отправка..." : "Отправить"}
+            {loading ? "Перевіряємо..." : "Перевірити"}
           </button>
 
-          {okMessage && <div className="ok">{okMessage}</div>}
           {errorMessage && <div className="err">{errorMessage}</div>}
+          {ticketStatus && (
+            <div className="result">
+              <div className="row">
+                <span className="rowLabel">Номер заявки</span>
+                <span className="rowValue">{ticketStatus.ticketNumber}</span>
+              </div>
+              <div className="row">
+                <span className="rowLabel">Статус</span>
+                <span className="rowValue">
+                  <span className={ticketStatus.statusType.toLowerCase() === "closed" ? "badge closed" : "badge open"}>
+                    {ticketStatus.status}
+                  </span>
+                </span>
+              </div>
+            </div>
+          )}
         </form>
       </section>
     </main>

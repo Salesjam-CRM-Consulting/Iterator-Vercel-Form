@@ -1,14 +1,14 @@
-# Ticket Form for Vercel
+# Ticket Status Form for Vercel
 
-Отдельная форма заявок на Next.js (Node), которую можно встроить в Joomla через `iframe`.
+Отдельная форма проверки статуса заявки на Next.js (Node), которую можно встроить в Joomla через `iframe`.
 
 ## Что внутри
 
-- форма с JS-валидацией браузера;
+- форма ввода номера заявки;
 - captcha через Cloudflare Turnstile (опционально);
-- серверный API `/api/submit` с проверкой captcha;
-- отправка заявки в `WEBHOOK_URL` (опционально, CRM/Telegram/Make/Zapier);
-- zero-config режим: если `WEBHOOK_URL` не задан, заявки пишутся в Vercel Logs.
+- серверный API `/api/ticket-status` с проверкой captcha;
+- прокси-запрос к API статусов тикетов (как в модуле `mod_ticketstatus`);
+- вывод результата `Номер заявки + Статус`.
 
 ## Локальный запуск
 
@@ -26,10 +26,10 @@
 2. (Опционально) в Variables добавь:
    - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
    - `TURNSTILE_SECRET_KEY`
-   - `WEBHOOK_URL`
+   - `TICKET_STATUS_API_URL`
 3. Deploy.
 
-Можно деплоить и без переменных — форма будет работать, а заявки смотреть в Vercel Logs.
+Можно деплоить и без `TICKET_STATUS_API_URL` — будет использоваться URL по умолчанию из старого модуля.
 
 ## Вставка в Joomla через iframe
 
