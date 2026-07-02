@@ -1,6 +1,5 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
 import Script from "next/script";
 import { FormEvent, useEffect, useState } from "react";
 
@@ -85,8 +84,7 @@ function normalizeLang(langValue: string | null): Lang {
 }
 
 export default function HomePage() {
-  const searchParams = useSearchParams();
-  const lang = normalizeLang(searchParams.get("lang"));
+  const [lang, setLang] = useState<Lang>("uk");
   const t = TEXTS[lang];
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || TURNSTILE_TEST_SITE_KEY;
   const [loading, setLoading] = useState(false);
@@ -102,6 +100,9 @@ export default function HomePage() {
     window.onTurnstileSuccess = (token: string) => {
       setCaptchaToken(token);
     };
+
+    const params = new URLSearchParams(window.location.search);
+    setLang(normalizeLang(params.get("lang")));
   }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
