@@ -61,6 +61,25 @@ function normalizeLang(langValue?: string): Lang {
   return "uk";
 }
 
+function localizeExternalError(message: unknown, messages: (typeof MESSAGES)[Lang]): string {
+  const raw = String(message || "").trim();
+  const lower = raw.toLowerCase();
+
+  if (!raw) return messages.notFound;
+
+  if (
+    lower.includes("not found") ||
+    lower.includes("ticket not found") ||
+    lower.includes("notfound") ||
+    lower.includes("не найден") ||
+    lower.includes("не знайдено")
+  ) {
+    return messages.notFound;
+  }
+
+  return messages.requestError;
+}
+
 function getClientIp(request: Request): string | null {
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) {
@@ -100,7 +119,7 @@ function parseTicketFromApi(apiData: unknown, messages: (typeof MESSAGES)[Lang])
   };
 
   if (!payload || payload.code !== "success" || !payload.details?.output) {
-    return { ticket: null, errorMessage: payload?.message || messages.notFound };
+    return { ticket: null, errorMessage: localizeExternalError(payload?.message, messages) };
   }
 
   let inner: any;
@@ -111,7 +130,7 @@ function parseTicketFromApi(apiData: unknown, messages: (typeof MESSAGES)[Lang])
   }
 
   if (!inner || inner.success !== true) {
-    return { ticket: null, errorMessage: inner?.message || messages.notFound };
+    return { ticket: null, errorMessage: localizeExternalError(inner?.message, messages) };
   }
 
   return {
@@ -124,10 +143,12 @@ function parseTicketFromApi(apiData: unknown, messages: (typeof MESSAGES)[Lang])
 }
 
 export async function POST(request: Request) {
+  let messages = MESSAGES.uk;
+
   try {
     const payload = (await request.json()) as RequestPayload;
     const lang = normalizeLang(payload.lang);
-    const messages = MESSAGES[lang];
+    messages = MESSAGES[lang];
     const ticketNumber = String(payload.ticketNumber || "").trim();
 
     if (!ticketNumber) {
@@ -174,6 +195,6 @@ export async function POST(request: Request) {
 
     return Response.json({ ticket: parsed.ticket });
   } catch {
-    return Response.json({ message: MESSAGES.uk.requestError }, { status: 500 });
+    return Response.json({ message: messages.requestError }, { status: 500 });
   }
 }
